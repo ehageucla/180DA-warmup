@@ -1,75 +1,61 @@
-# CREDIT: OPENCV kmeans.py on GITHUB
-# found at https://github.com/opencv/opencv/blob/master/samples/python/kmeans.py
-# !/usr/bin/env python
+#CODE CREDIT FOR FINDING KMEANS GOES TO ayşe bilge gündüz
+#FOUND AT https://code.likeagirl.io/finding-dominant-colour-on-an-image-b4e075f98097
+#I added a crude method of taking frames from the camera
 
-'''
-K-means clusterization sample.
-Usage:
-   kmeans.py
-Keyboard shortcuts:
-   ESC   - exit
-   space - generate new distribution
-'''
-
-# Python 2/3 compatibility
-from __future__ import print_function
-
+import cv2
 import numpy as np
-import cv2 as cv
-
-#CREDIT: OPENCV gaussian_mix file
-#function definition placed here, can be found at
-#https://github.com/opencv/opencv/blob/master/samples/python/gaussian_mix.py
-from numpy import random
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
 
 
-def make_gaussians(cluster_n, img_size):
-    points = []
-    ref_distrs = []
-    for _i in xrange(cluster_n):
-        mean = (0.1 + 0.8 * random.rand(2)) * img_size
-        a = (random.rand(2, 2) - 0.5) * img_size * 0.1
-        cov = np.dot(a.T, a) + img_size * 0.05 * np.eye(2)
-        n = 100 + random.randint(900)
-        pts = random.multivariate_normal(mean, cov, n)
-        points.append(pts)
-        ref_distrs.append((mean, cov))
-    points = np.float32(np.vstack(points))
-    return points, ref_distrs
+def find_histogram(clt):
+    """
+    create a histogram with k clusters
+    :param: clt
+    :return:hist
+    """
+    numLabels = np.arange(0, len(np.unique(clt.labels_)) + 1)
+    (hist, _) = np.histogram(clt.labels_, bins=numLabels)
+
+    hist = hist.astype("float")
+    hist /= hist.sum()
+
+    return hist
+
+def plot_colors2(hist, centroids):
+    bar = np.zeros((50, 300, 3), dtype="uint8")
+    startX = 0
+
+    for (percent, color) in zip(hist, centroids):
+        # plot the relative percentage of each cluster
+        endX = startX + (percent * 300)
+        cv2.rectangle(bar, (int(startX), 0), (int(endX), 50),
+                      color.astype("uint8").tolist(), -1)
+        startX = endX
+
+    # return the bar chart
+    return bar
 
 
-def main():
-    cluster_n = 5
-    img_size = 512
+cap = cv2.VideoCapture(0)
 
-    # generating bright palette
-    colors = np.zeros((1, cluster_n, 3), np.uint8)
-    colors[0, :] = 255
-    colors[0, :, 0] = np.arange(0, 180, 180.0 / cluster_n)
-    colors = cv.cvtColor(colors, cv.COLOR_HSV2BGR)[0]
+while(True):
+    ret, frame = cap.read()
+    print('finding')
+    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    while True:
-        print('sampling distributions...')
-        points, _ = make_gaussians(cluster_n, img_size)
+    img = img.reshape((img.shape[0] * img.shape[1],3)) #represent as row*column,channel number
+    clt = KMeans(n_clusters=3) #cluster number
+    clt.fit(img)
 
-        term_crit = (cv.TERM_CRITERIA_EPS, 30, 0.1)
-        _ret, labels, _centers = cv.kmeans(points, cluster_n, None, term_crit, 10, 0)
+    hist = find_histogram(clt)
+    bar = plot_colors2(hist, clt.cluster_centers_)
 
-        img = np.zeros((img_size, img_size, 3), np.uint8)
-        for (x, y), label in zip(np.int32(points), labels.ravel()):
-            c = list(map(int, colors[label]))
+    plt.axis("off")
+    plt.imshow(bar)
+    plt.show()
+    ch = cv2.waitKey(0)
+    if ch == 27:
+        break
 
-            cv.circle(img, (x, y), 1, c, -1)
-
-        cv.imshow('kmeans', img)
-        ch = cv.waitKey(0)
-        if ch == 27:
-            break
-
-    print('Done')
-
-
-if __name__ == '__main__':
-    print(__doc__)
-    main()
-    cv.destroyAllWindows()
+print('Done')
